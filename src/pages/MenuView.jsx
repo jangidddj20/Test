@@ -7,16 +7,34 @@ import { ArrowLeft, Plus, Minus, ShoppingCart, Star, Leaf, Heart, Filter } from 
 const MenuView = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { restaurants, getMenuItems, addToCart, cart } = useData();
+  const { restaurants, loadMenuItems, addToCart, cart } = useData();
   const { addNotification } = useNotification();
   
   const restaurant = restaurants.find(r => r.id === parseInt(id));
-  const menuItems = getMenuItems(parseInt(id));
+  const [menuItems, setMenuItems] = useState([]);
+  const [isLoadingMenu, setIsLoadingMenu] = useState(true);
   
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [selectedDietary, setSelectedDietary] = useState('all');
   const [itemQuantities, setItemQuantities] = useState({});
 
+  useEffect(() => {
+    if (id) {
+      loadMenu();
+    }
+  }, [id]);
+
+  const loadMenu = async () => {
+    setIsLoadingMenu(true);
+    try {
+      const items = await loadMenuItems(parseInt(id));
+      setMenuItems(items);
+    } catch (error) {
+      addNotification('Failed to load menu', 'error');
+    } finally {
+      setIsLoadingMenu(false);
+    }
+  };
   if (!restaurant) {
     return <div>Restaurant not found</div>;
   }
@@ -145,6 +163,12 @@ const MenuView = () => {
 
       {/* Menu Items */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-8">
+        {isLoadingMenu ? (
+          <div className="text-center py-12">
+            <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+            <p className="text-gray-600">Loading menu...</p>
+          </div>
+        ) : (
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
           {filteredItems.map(item => (
             <div key={item.id} className="bg-white rounded-xl shadow-lg overflow-hidden hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-1 md:hover:-translate-y-2">
@@ -222,6 +246,7 @@ const MenuView = () => {
             </div>
           ))}
         </div>
+        )}
         
         {filteredItems.length === 0 && (
           <div className="text-center py-8 md:py-12">

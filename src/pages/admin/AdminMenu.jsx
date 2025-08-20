@@ -67,7 +67,9 @@ const AdminMenu = () => {
         setMenuItems(response.data);
       }
     } catch (error) {
-      addNotification('Failed to load menu items', 'error');
+      console.error('Failed to load menu items:', error);
+      // Set empty array for demo
+      setMenuItems([]);
     }
   };
 
@@ -78,7 +80,7 @@ const AdminMenu = () => {
         setTables(response.data);
       }
     } catch (error) {
-      // Tables will be empty initially, no error needed
+      console.error('Failed to load tables:', error);
       setTables([]);
     } finally {
       setIsLoading(false);

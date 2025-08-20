@@ -8,6 +8,7 @@ const PaymentView = () => {
   const navigate = useNavigate();
   const { clearCart } = useData();
   const { addNotification } = useNotification();
+  const { apiCall } = useAuth();
   
   const [orderData, setOrderData] = useState(null);
   const [paymentData, setPaymentData] = useState({
@@ -81,19 +82,42 @@ const PaymentView = () => {
     e.preventDefault();
     setIsProcessing(true);
 
-    // Simulate payment processing
-    setTimeout(() => {
+    try {
+      // Create order in backend
+      const orderItems = orderData.items.map(item => ({
+        menuItemId: item.id,
+        quantity: item.quantity,
+        price: item.price
+      }));
+
+      const result = await apiCall('/orders', {
+        method: 'POST',
+        body: {
+          restaurantId: orderData.restaurant.id,
+          orderType: orderData.orderDetails.orderType,
+          items: orderItems,
+          totalAmount: orderData.pricing.total,
+          scheduledTime: orderData.orderDetails.scheduledTime,
+          specialInstructions: orderData.orderDetails.specialInstructions
+        }
+      });
+
+      if (result.success) {
+        setIsProcessing(false);
+        setPaymentSuccess(true);
+        clearCart();
+        localStorage.removeItem('orderData');
+        addNotification('Payment successful! Order confirmed.', 'success');
+        
+        // Redirect to dashboard after success
+        setTimeout(() => {
+          navigate('/dashboard');
+        }, 3000);
+      }
+    } catch (error) {
       setIsProcessing(false);
-      setPaymentSuccess(true);
-      clearCart();
-      localStorage.removeItem('orderData');
-      addNotification('Payment successful! Order confirmed.', 'success');
-      
-      // Redirect to dashboard after success
-      setTimeout(() => {
-        navigate('/dashboard');
-      }, 3000);
-    }, 3000);
+      addNotification('Payment failed: ' + error.message, 'error');
+    }
   };
 
   if (!orderData) {

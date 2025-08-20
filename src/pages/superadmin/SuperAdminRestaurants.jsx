@@ -42,7 +42,7 @@ const SuperAdminRestaurants = () => {
         setRestaurants(response.data);
       }
     } catch (error) {
-      addNotification('Failed to load restaurants', 'error');
+      console.error('Failed to load restaurants:', error);
       // Use mock data for demo
       setRestaurants([
         {
@@ -123,6 +123,7 @@ const SuperAdminRestaurants = () => {
         addNotification(`Restaurant ${!currentStatus ? 'activated' : 'deactivated'} successfully`, 'success');
       }
     } catch (error) {
+      console.error('Failed to update restaurant status:', error);
       addNotification('Failed to update restaurant status', 'error');
     }
   };

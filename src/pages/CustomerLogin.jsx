@@ -80,15 +80,11 @@ const CustomerLogin = () => {
     try {
       const fullMobile = `${mobileData.countryCode}${mobileData.mobile.replace(/^\+/, '')}`;
       
-      const response = await fetch('http://localhost:5000/api/auth/send-otp', {
+      const result = await fetch('http://localhost:5000/api/auth/send-otp', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ mobile: fullMobile })
-      });
-
-      const result = await response.json();
+      }).then(res => res.json());
 
       if (result.success) {
         setOtpSent(true);
@@ -119,18 +115,14 @@ const CustomerLogin = () => {
     setErrors({});
 
     try {
-      const response = await fetch('http://localhost:5000/api/auth/login', {
+      const result = await fetch('http://localhost:5000/api/auth/login', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           identifier: formData.email,
           password: formData.password
         })
-      });
-
-      const result = await response.json();
+      }).then(res => res.json());
 
       if (result.success) {
         const user = result.data.user;
@@ -170,18 +162,14 @@ const CustomerLogin = () => {
     try {
       const fullMobile = `${mobileData.countryCode}${mobileData.mobile.replace(/^\+/, '')}`;
       
-      const response = await fetch('http://localhost:5000/api/auth/verify-otp-login', {
+      const result = await fetch('http://localhost:5000/api/auth/verify-otp-login', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           mobile: fullMobile,
           otp: mobileData.otp
         })
-      });
-
-      const result = await response.json();
+      }).then(res => res.json());
 
       if (result.success) {
         const user = result.data.user;

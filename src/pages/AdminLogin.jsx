@@ -28,13 +28,14 @@ const AdminLogin = () => {
     setIsLoading(true);
 
     // Use the regular login endpoint which now handles admin login
-    apiCall('/auth/login', {
+    fetch('http://localhost:5000/api/auth/login', {
       method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
       body: {
         identifier: formData.adminId,
         password: formData.password
       }
-    })
+    }).then(res => res.json())
     .then(response => {
       if (response.success) {
         const user = response.data.user;

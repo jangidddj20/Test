@@ -89,20 +89,16 @@ const CustomerSignup = () => {
     setIsLoading(true);
 
     try {
-      const response = await fetch('http://localhost:5000/api/auth/signup', {
+      const result = await fetch('http://localhost:5000/api/auth/signup', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: formData.name,
           email: formData.email,
           mobile: formData.phone,
           password: formData.password
         })
-      });
-
-      const result = await response.json();
+      }).then(res => res.json());
 
       if (result.success) {
         addNotification('Account created successfully! Please sign in.', 'success');

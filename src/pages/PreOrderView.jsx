@@ -9,6 +9,7 @@ const PreOrderView = () => {
   const navigate = useNavigate();
   const { restaurants, cart, removeFromCart, clearCart } = useData();
   const { addNotification } = useNotification();
+  const { apiCall } = useAuth();
   
   const restaurant = restaurants.find(r => r.id === parseInt(id));
   const restaurantCartItems = cart.filter(item => item.restaurantId === parseInt(id));
@@ -62,13 +63,16 @@ const PreOrderView = () => {
       return;
     }
 
-    // Store order details in localStorage for payment page
-    localStorage.setItem('orderData', JSON.stringify({
+    // Create order via API
+    const orderData = {
       restaurant,
       items: groupedItemsArray,
       orderDetails,
       pricing: { subtotal, tax, deliveryFee, total }
-    }));
+    };
+
+    // Store order details in localStorage for payment page
+    localStorage.setItem('orderData', JSON.stringify(orderData));
 
     navigate('/payment');
   };

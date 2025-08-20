@@ -29,8 +29,7 @@ function App() {
   const loadTables = async () => {
     setIsLoadingPhotos(true);
     try {
-      const response = await fetch(`http://localhost:5000/api/restaurants/${id}/tables`);
-      const result = await response.json();
+      const result = await apiCall(`/restaurants/${id}/tables`);
       
       if (result.success) {
         setTables(result.data);
@@ -149,7 +148,7 @@ function App() {
 
 
     // Make actual booking API call
-    apiCall('/bookings', {
+    const result = await apiCall('/bookings', {
       method: 'POST',
       body: {
         restaurantId: parseInt(id),
@@ -159,30 +158,26 @@ function App() {
         guests: bookingData.guests,
         specialRequests: bookingData.specialRequests
       }
-    })
-    .then(response => {
-      if (response.success) {
-        alert(`Table booked successfully!\n\nTable: ${selectedTable.name}\nDate: ${bookingData.date}\nTime: ${bookingData.time}\nGuests: ${bookingData.guests}`);
-        
-        // Reset form and navigate back
-        setShowTableCards(true);
-        setShowImageView(false);
-        setSelectedTable(null);
-        setCurrentImageIndex(0);
-        setBookingData({
-          date: '',
-          time: '',
-          guests: 2,
-          specialRequests: ''
-        });
-        
-        // Refresh tables to update status
-        loadTables();
-      }
-    })
-    .catch(error => {
-      alert('Booking failed: ' + error.message);
     });
+
+    if (result.success) {
+      alert(`Table booked successfully!\n\nTable: ${selectedTable.name}\nDate: ${bookingData.date}\nTime: ${bookingData.time}\nGuests: ${bookingData.guests}`);
+        
+      // Reset form and navigate back
+      setShowTableCards(true);
+      setShowImageView(false);
+      setSelectedTable(null);
+      setCurrentImageIndex(0);
+      setBookingData({
+        date: '',
+        time: '',
+        guests: 2,
+        specialRequests: ''
+      });
+        
+      // Refresh tables to update status
+      loadTables();
+    }
   };
 
   // Choose Your Table View

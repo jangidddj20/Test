@@ -44,10 +44,24 @@ const AdminOverview = () => {
       // Load recent tables
       const tablesResponse = await apiCall('/admin/tables');
       if (tablesResponse.success) {
-        setRecentTables(tablesResponse.data.slice(0, 5)); // Show last 5 tables
+        setRecentTables(tablesResponse.data.slice(0, 5));
       }
     } catch (error) {
       addNotification('Failed to load dashboard data', 'error');
+      // Set default data for demo
+      setDashboardData({
+        stats: {
+          totalOrders: 0,
+          pendingOrders: 0,
+          totalBookings: 0,
+          todaysBookings: 0,
+          totalRevenue: 0,
+          totalMenuItems: 0,
+          availableTables: 0
+        },
+        recentOrders: [],
+        recentBookings: []
+      });
       setRecentTables([]);
     } finally {
       setIsLoading(false);

@@ -29,13 +29,14 @@ const SuperAdminLogin = () => {
     setIsLoading(true);
 
     // Use the regular login endpoint which now handles super admin login
-    apiCall('/auth/login', {
+    fetch('http://localhost:5000/api/auth/login', {
       method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
       body: {
         identifier: formData.email,
         password: formData.password
       }
-    })
+    }).then(res => res.json())
     .then(response => {
       if (response.success) {
         const user = response.data.user;

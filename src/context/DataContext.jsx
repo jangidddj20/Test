@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState } from 'react';
+import { useAuth } from './AuthContext';
 
 const DataContext = createContext();
 
@@ -136,13 +137,13 @@ export const DataProvider = ({ children }) => {
   const [bookings, setBookings] = useState([]);
   const [cart, setCart] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
+  const { apiCall } = useAuth();
 
   // Load restaurants from API
   const loadRestaurants = async () => {
     setIsLoading(true);
     try {
-      const response = await fetch('http://localhost:5000/api/restaurants');
-      const result = await response.json();
+      const result = await apiCall('/restaurants');
       if (result.success) {
         setRestaurants(result.data);
       }
@@ -212,7 +213,42 @@ export const DataProvider = ({ children }) => {
   };
 
   const getMenuItems = (restaurantId) => {
+    // This will be loaded from API when needed
     return mockMenuItems[restaurantId] || [];
+  };
+
+  const loadMenuItems = async (restaurantId) => {
+    try {
+      const result = await apiCall(`/restaurants/${restaurantId}/menu`);
+      if (result.success) {
+        return result.data;
+      }
+    } catch (error) {
+      console.error('Failed to load menu items:', error);
+      return mockMenuItems[restaurantId] || [];
+    }
+  };
+
+  const loadUserOrders = async () => {
+    try {
+      const result = await apiCall('/orders');
+      if (result.success) {
+        setOrders(result.data);
+      }
+    } catch (error) {
+      console.error('Failed to load orders:', error);
+    }
+  };
+
+  const loadUserBookings = async () => {
+    try {
+      const result = await apiCall('/bookings');
+      if (result.success) {
+        setBookings(result.data);
+      }
+    } catch (error) {
+      console.error('Failed to load bookings:', error);
+    }
   };
 
   const value = {
@@ -231,7 +267,10 @@ export const DataProvider = ({ children }) => {
     clearCart,
     addBooking,
     updateTableStatus,
-    getMenuItems
+    getMenuItems,
+    loadMenuItems,
+    loadUserOrders,
+    loadUserBookings
   };
 
   return (

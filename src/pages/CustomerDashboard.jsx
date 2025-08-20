@@ -8,16 +8,18 @@ import NotificationToast from '../components/NotificationToast';
 
 const CustomerDashboard = () => {
   const { user, logout } = useAuth();
-  const { restaurants, isLoading: restaurantsLoading, loadRestaurants } = useData();
+  const { restaurants, isLoading: restaurantsLoading, loadRestaurants, loadUserOrders, loadUserBookings } = useData();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCuisine, setSelectedCuisine] = useState('all');
   const [favorites, setFavorites] = useState([]);
 
   // Refresh restaurants data periodically
   React.useEffect(() => {
+    loadUserOrders();
+    loadUserBookings();
     const interval = setInterval(loadRestaurants, 30000); // Refresh every 30 seconds
     return () => clearInterval(interval);
-  }, []); // Remove loadRestaurants from dependencies to prevent infinite loop
+  }, []);
 
   const cuisines = ['all', 'Fine Dining', 'Japanese', 'Italian', 'Indian', 'Mexican'];
 

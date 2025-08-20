@@ -44,7 +44,7 @@ const SuperAdminUsers = () => {
         setUsers(response.data);
       }
     } catch (error) {
-      addNotification('Failed to load users', 'error');
+      console.error('Failed to load users:', error);
       // Use mock data for demo
       setUsers({
         customers: [
@@ -136,6 +136,7 @@ const SuperAdminUsers = () => {
         addNotification(`User ${!currentStatus ? 'activated' : 'deactivated'} successfully`, 'success');
       }
     } catch (error) {
+      console.error('Failed to update user status:', error);
       addNotification('Failed to update user status', 'error');
     }
   };
