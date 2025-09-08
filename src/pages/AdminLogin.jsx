@@ -20,8 +20,23 @@ const AdminLogin = () => {
 
   // Redirect if already authenticated as admin to admin dashboard
   React.useEffect(() => {
-    if (isAuthenticated && role === 'admin') {
-      navigate(from, { replace: true });
+    // Check if there's an existing admin session
+    const adminUser = localStorage.getItem('admin_auth_user');
+    const adminRole = localStorage.getItem('admin_auth_role');
+    const adminToken = localStorage.getItem('admin_auth_token');
+    
+    if (adminUser && adminRole && adminToken) {
+      try {
+        const tokenPayload = JSON.parse(atob(adminToken.split('.')[1]));
+        const currentTime = Date.now() / 1000;
+        
+        if (tokenPayload.exp && tokenPayload.exp > currentTime) {
+          // Valid admin session exists, redirect
+          navigate(from, { replace: true });
+        }
+      } catch (error) {
+        // Invalid token, continue with login
+      }
     }
   }, [isAuthenticated, role, navigate, from]);
   const handleInputChange = (e) => {

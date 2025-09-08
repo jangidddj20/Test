@@ -21,7 +21,32 @@ import { useAuth } from './context/AuthContext';
 
 // App content component that uses auth context
 const AppContent = () => {
-  const { authChecked } = useAuth();
+  const { authChecked, switchRole } = useAuth();
+
+  // Handle role switching based on URL changes
+  useEffect(() => {
+    const handleRouteChange = () => {
+      const path = window.location.pathname;
+      let targetRole = 'customer';
+      
+      if (path.includes('/admin') && !path.includes('/super-admin')) {
+        targetRole = 'admin';
+      } else if (path.includes('/super-admin')) {
+        targetRole = 'superadmin';
+      }
+      
+      // Try to switch to the appropriate role session if available
+      switchRole(targetRole);
+    };
+
+    // Listen for route changes
+    window.addEventListener('popstate', handleRouteChange);
+    handleRouteChange(); // Check initial route
+
+    return () => {
+      window.removeEventListener('popstate', handleRouteChange);
+    };
+  }, [switchRole]);
 
   // Show loading screen only while checking authentication
   if (!authChecked) {

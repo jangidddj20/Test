@@ -29,8 +29,23 @@ const CustomerLogin = () => {
 
   // Redirect if already authenticated as customer to customer dashboard
   React.useEffect(() => {
-    if (isAuthenticated && role === 'customer') {
-      navigate(from, { replace: true });
+    // Check if there's an existing customer session
+    const customerUser = localStorage.getItem('customer_auth_user');
+    const customerRole = localStorage.getItem('customer_auth_role');
+    const customerToken = localStorage.getItem('customer_auth_token');
+    
+    if (customerUser && customerRole && customerToken) {
+      try {
+        const tokenPayload = JSON.parse(atob(customerToken.split('.')[1]));
+        const currentTime = Date.now() / 1000;
+        
+        if (tokenPayload.exp && tokenPayload.exp > currentTime) {
+          // Valid customer session exists, redirect
+          navigate(from, { replace: true });
+        }
+      } catch (error) {
+        // Invalid token, continue with login
+      }
     }
   }, [isAuthenticated, role, navigate, from]);
   const countryCodes = [

@@ -9,14 +9,54 @@ const HomePage = () => {
 
   // Only redirect if user is on homepage and authenticated
   React.useEffect(() => {
-    // Only redirect from homepage, not from other pages
-    if (isAuthenticated && window.location.pathname === '/') {
-      if (role === 'admin') {
-        navigate('/admin', { replace: true });
-      } else if (role === 'superadmin') {
-        navigate('/super-admin', { replace: true });
-      } else {
-        navigate('/dashboard', { replace: true });
+    // Check for any existing valid sessions and redirect accordingly
+    if (window.location.pathname === '/') {
+      // Check for super admin session first (highest priority)
+      const superAdminToken = localStorage.getItem('superadmin_auth_token');
+      if (superAdminToken) {
+        try {
+          const tokenPayload = JSON.parse(atob(superAdminToken.split('.')[1]));
+          if (tokenPayload.exp > Date.now() / 1000) {
+            navigate('/super-admin', { replace: true });
+            return;
+          }
+        } catch (error) {
+          localStorage.removeItem('superadmin_auth_token');
+          localStorage.removeItem('superadmin_auth_user');
+          localStorage.removeItem('superadmin_auth_role');
+        }
+      }
+      
+      // Check for admin session
+      const adminToken = localStorage.getItem('admin_auth_token');
+      if (adminToken) {
+        try {
+          const tokenPayload = JSON.parse(atob(adminToken.split('.')[1]));
+          if (tokenPayload.exp > Date.now() / 1000) {
+            navigate('/admin', { replace: true });
+            return;
+          }
+        } catch (error) {
+          localStorage.removeItem('admin_auth_token');
+          localStorage.removeItem('admin_auth_user');
+          localStorage.removeItem('admin_auth_role');
+        }
+      }
+      
+      // Check for customer session
+      const customerToken = localStorage.getItem('customer_auth_token');
+      if (customerToken) {
+        try {
+          const tokenPayload = JSON.parse(atob(customerToken.split('.')[1]));
+          if (tokenPayload.exp > Date.now() / 1000) {
+            navigate('/dashboard', { replace: true });
+            return;
+          }
+        } catch (error) {
+          localStorage.removeItem('customer_auth_token');
+          localStorage.removeItem('customer_auth_user');
+          localStorage.removeItem('customer_auth_role');
+        }
       }
     }
   }, [isAuthenticated, role, navigate]);

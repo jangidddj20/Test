@@ -21,8 +21,23 @@ const SuperAdminLogin = () => {
 
   // Redirect if already authenticated as super admin to super admin dashboard
   React.useEffect(() => {
-    if (isAuthenticated && role === 'superadmin') {
-      navigate(from, { replace: true });
+    // Check if there's an existing super admin session
+    const superAdminUser = localStorage.getItem('superadmin_auth_user');
+    const superAdminRole = localStorage.getItem('superadmin_auth_role');
+    const superAdminToken = localStorage.getItem('superadmin_auth_token');
+    
+    if (superAdminUser && superAdminRole && superAdminToken) {
+      try {
+        const tokenPayload = JSON.parse(atob(superAdminToken.split('.')[1]));
+        const currentTime = Date.now() / 1000;
+        
+        if (tokenPayload.exp && tokenPayload.exp > currentTime) {
+          // Valid super admin session exists, redirect
+          navigate(from, { replace: true });
+        }
+      } catch (error) {
+        // Invalid token, continue with login
+      }
     }
   }, [isAuthenticated, role, navigate, from]);
   const handleInputChange = (e) => {

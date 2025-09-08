@@ -78,6 +78,13 @@ const AdminSidebar = () => {
             <p className="text-xs text-slate-400">Restaurant Admin</p>
           </div>
         </div>
+        
+        {/* Role Session Indicator */}
+        <div className="mb-4 p-2 bg-slate-800 rounded-lg">
+          <p className="text-xs text-slate-400">Active Session:</p>
+          <p className="text-sm font-medium text-blue-400">Admin Panel</p>
+        </div>
+        
         <button
           onClick={logout}
           className="w-full flex items-center space-x-2 px-4 py-2 text-slate-300 hover:bg-slate-800 hover:text-white rounded-lg transition-colors"

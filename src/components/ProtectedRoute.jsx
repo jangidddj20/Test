@@ -3,7 +3,7 @@ import { Navigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
 const ProtectedRoute = ({ children, role }) => {
-  const { isAuthenticated, role: userRole, authChecked } = useAuth();
+  const { isAuthenticated, role: userRole, authChecked, switchRole } = useAuth();
 
   // Show loading spinner only while checking authentication
   if (!authChecked) {
@@ -19,6 +19,15 @@ const ProtectedRoute = ({ children, role }) => {
     );
   }
 
+  // Try to switch to required role if not currently authenticated for that role
+  if (!isAuthenticated && role) {
+    const switched = switchRole(role);
+    if (switched) {
+      // Successfully switched to required role, render children
+      return children;
+    }
+  }
+
   // Redirect to appropriate login page if not authenticated
   if (!isAuthenticated) {
     if (role === 'admin') return <Navigate to="/admin-dashboard-secret-portal-2025" replace />;
@@ -28,6 +37,12 @@ const ProtectedRoute = ({ children, role }) => {
 
   // Check role authorization
   if (role && userRole !== role) {
+    // Try to switch to the required role first
+    const switched = switchRole(role);
+    if (switched) {
+      return children;
+    }
+    
     // Redirect to appropriate dashboard based on user's actual role
     if (userRole === 'admin') return <Navigate to="/admin" replace />;
     if (userRole === 'superadmin') return <Navigate to="/super-admin" replace />;

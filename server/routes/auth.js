@@ -19,7 +19,13 @@ const router = express.Router();
 // Generate JWT token
 const generateToken = (userId, role, additionalData = {}) => {
     return jwt.sign(
-        { userId, role, ...additionalData },
+        { 
+            userId, 
+            role, 
+            ...additionalData,
+            iat: Math.floor(Date.now() / 1000),
+            jti: `${role}_${userId}_${Date.now()}` // Unique token identifier per role
+        },
         process.env.JWT_SECRET,
         { expiresIn: '24h' }
     );
