@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Bell, X, Check } from 'lucide-react';
 import { useCustomerAuth } from '../context/CustomerAuthContext';
+import { apiCache } from '../utils/apiCache';
 
 const NotificationBell = () => {
   const { apiCall } = useCustomerAuth();
@@ -9,14 +10,17 @@ const NotificationBell = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const dropdownRef = useRef(null);
+  const loadingNotificationsRef = useRef(false);
+  const loadingCountRef = useRef(false);
 
   useEffect(() => {
     loadNotifications();
     loadUnreadCount();
 
     const interval = setInterval(() => {
+      apiCache.invalidatePattern('/bookings/notifications');
       loadUnreadCount();
-    }, 30000);
+    }, 60000); // Check every 60 seconds
 
     return () => clearInterval(interval);
   }, []);
@@ -33,9 +37,16 @@ const NotificationBell = () => {
   }, []);
 
   const loadNotifications = async () => {
+    if (loadingNotificationsRef.current) return;
+
+    loadingNotificationsRef.current = true;
+    setIsLoading(true);
+
     try {
-      setIsLoading(true);
-      const response = await apiCall('/bookings/notifications?limit=10');
+      const response = await apiCache.dedupe('/bookings/notifications', { limit: 10 }, async () => {
+        return await apiCall('/bookings/notifications?limit=10');
+      });
+
       if (response && response.success) {
         setNotifications(response.data || []);
       }
@@ -43,17 +54,27 @@ const NotificationBell = () => {
       console.error('Failed to load notifications:', error);
     } finally {
       setIsLoading(false);
+      loadingNotificationsRef.current = false;
     }
   };
 
   const loadUnreadCount = async () => {
+    if (loadingCountRef.current) return;
+
+    loadingCountRef.current = true;
+
     try {
-      const response = await apiCall('/bookings/notifications/unread-count');
+      const response = await apiCache.dedupe('/bookings/notifications/unread-count', {}, async () => {
+        return await apiCall('/bookings/notifications/unread-count');
+      });
+
       if (response && response.success) {
         setUnreadCount(response.data.count || 0);
       }
     } catch (error) {
       console.error('Failed to load unread count:', error);
+    } finally {
+      loadingCountRef.current = false;
     }
   };
 
@@ -67,6 +88,7 @@ const NotificationBell = () => {
         prev.map(n => n.id === notificationId ? { ...n, is_read: 1 } : n)
       );
       setUnreadCount(prev => Math.max(0, prev - 1));
+      apiCache.invalidatePattern('/bookings/notifications');
     } catch (error) {
       console.error('Failed to mark notification as read:', error);
     }
@@ -80,6 +102,7 @@ const NotificationBell = () => {
 
       setNotifications(prev => prev.map(n => ({ ...n, is_read: 1 })));
       setUnreadCount(0);
+      apiCache.invalidatePattern('/bookings/notifications');
     } catch (error) {
       console.error('Failed to mark all as read:', error);
     }
@@ -88,6 +111,7 @@ const NotificationBell = () => {
   const handleBellClick = () => {
     setIsOpen(!isOpen);
     if (!isOpen) {
+      apiCache.invalidatePattern('/bookings/notifications');
       loadNotifications();
     }
   };

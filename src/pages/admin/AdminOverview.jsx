@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAdminAuth } from '../../context/AdminAuthContext';
 import { useNotification } from '../../context/NotificationContext';
+import { apiCache } from '../../utils/apiCache';
 import { 
   TrendingUp, 
   Users, 
@@ -28,20 +29,27 @@ const AdminOverview = () => {
   });
   const [recentTables, setRecentTables] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+  const loadingRef = useRef(false);
 
   useEffect(() => {
     loadDashboardData();
   }, []);
 
   const loadDashboardData = async () => {
+    if (loadingRef.current) return;
+
+    loadingRef.current = true;
     setIsLoading(true);
+
     try {
-      const response = await apiCall('/admin/dashboard');
+      const response = await apiCache.dedupe('/admin/dashboard', {}, async () => {
+        return await apiCall('/admin/dashboard');
+      });
+
       if (response && response.success) {
         setDashboardData(response.data);
       } else {
         console.warn('Unexpected dashboard response format:', response);
-        // Use mock data for demo
         setDashboardData({
           stats: {
             totalOrders: 156,
@@ -62,8 +70,10 @@ const AdminOverview = () => {
         });
       }
 
-      // Load recent tables
-      const tablesResponse = await apiCall('/admin/tables');
+      const tablesResponse = await apiCache.dedupe('/admin/tables', {}, async () => {
+        return await apiCall('/admin/tables');
+      });
+
       if (tablesResponse && tablesResponse.success) {
         setRecentTables(tablesResponse.data.slice(0, 5));
       } else if (Array.isArray(tablesResponse)) {
@@ -74,7 +84,6 @@ const AdminOverview = () => {
       }
     } catch (error) {
       console.error('Dashboard load error:', error);
-      // Set default data for demo
       setDashboardData({
         stats: {
           totalOrders: 156,
@@ -96,15 +105,18 @@ const AdminOverview = () => {
       setRecentTables([]);
     } finally {
       setIsLoading(false);
+      loadingRef.current = false;
     }
   };
 
   // Auto-refresh dashboard data
   useEffect(() => {
     const interval = setInterval(() => {
+      apiCache.invalidatePattern('/admin/dashboard');
+      apiCache.invalidatePattern('/admin/tables');
       loadDashboardData();
-    }, 60000); // Refresh every minute
-    
+    }, 120000); // Refresh every 2 minutes
+
     return () => clearInterval(interval);
   }, []);
 

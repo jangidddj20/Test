@@ -1,5 +1,6 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { useCustomerAuth } from './CustomerAuthContext';
+import { apiCache } from '../utils/apiCache';
 
 const CustomerDataContext = createContext();
 
@@ -19,6 +20,7 @@ export const CustomerDataProvider = ({ children }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [dataLoaded, setDataLoaded] = useState(false);
   const { apiCall, isAuthenticated, authChecked, token } = useCustomerAuth();
+  const loadingRef = useRef(false);
 
   // Load data from localStorage on mount
   useEffect(() => {
@@ -74,30 +76,33 @@ export const CustomerDataProvider = ({ children }) => {
     localStorage.setItem('customer_cart', JSON.stringify(cart));
   }, [cart]);
 
-  // Load restaurants from API
+  // Load restaurants from API with deduplication
   const loadRestaurants = async () => {
+    if (loadingRef.current) return;
+
+    loadingRef.current = true;
     setIsLoading(true);
+
     try {
-      const response = await fetch('http://localhost:5000/api/restaurants');
-      const result = await response.json();
+      const result = await apiCache.dedupe('/restaurants', {}, async () => {
+        const response = await fetch('http://localhost:5000/api/restaurants');
+        return await response.json();
+      });
+
       if (result && result.success) {
         setRestaurants(result.data);
         setDataLoaded(true);
         console.log('🏪 Customer restaurants loaded from API');
       } else if (result && Array.isArray(result)) {
-        // Handle direct array response from backend
         setRestaurants(result.data);
         setDataLoaded(true);
       } else if (Array.isArray(result)) {
-        // Handle direct array response
         setRestaurants(result);
         setDataLoaded(true);
       }
     } catch (error) {
       console.warn('⚠️ Failed to load restaurants from API:', error.message);
-      // Don't clear existing data on network errors
       if (restaurants.length === 0) {
-        // Set fallback data if no stored data exists
         setRestaurants([
           {
             id: 1,
@@ -142,24 +147,27 @@ export const CustomerDataProvider = ({ children }) => {
       }
     } finally {
       setIsLoading(false);
+      loadingRef.current = false;
     }
   };
 
   // Load restaurants when authentication is ready
   React.useEffect(() => {
-    if (authChecked) {
+    if (authChecked && !dataLoaded) {
       loadRestaurants();
-      
-      // Set up periodic refresh only if authenticated
-      let interval;
-      if (isAuthenticated && token) {
-        interval = setInterval(() => {
-          loadRestaurants();
-        }, 60000); // Refresh every minute
-      }
-      return () => clearInterval(interval);
     }
-  }, [authChecked, isAuthenticated, token]);
+  }, [authChecked]);
+
+  // Set up periodic refresh
+  React.useEffect(() => {
+    if (!dataLoaded) return;
+
+    const interval = setInterval(() => {
+      loadRestaurants();
+    }, 60000); // Refresh every 60 seconds
+
+    return () => clearInterval(interval);
+  }, [dataLoaded]);
 
   const addToCart = (item, restaurantId) => {
     setCart(prev => [...prev, { ...item, restaurantId, id: Date.now() }]);
@@ -193,9 +201,12 @@ export const CustomerDataProvider = ({ children }) => {
 
   const loadUserOrders = async () => {
     if (!isAuthenticated || !token) return;
-    
+
     try {
-      const result = await apiCall('/orders');
+      const result = await apiCache.dedupe('/orders', {}, async () => {
+        return await apiCall('/orders');
+      });
+
       if (result && result.success) {
         setOrders(result.data);
         console.log('📋 Customer orders loaded from API');
@@ -207,9 +218,12 @@ export const CustomerDataProvider = ({ children }) => {
 
   const loadUserBookings = async () => {
     if (!isAuthenticated || !token) return;
-    
+
     try {
-      const result = await apiCall('/bookings');
+      const result = await apiCache.dedupe('/bookings', {}, async () => {
+        return await apiCall('/bookings');
+      });
+
       if (result && result.success) {
         setBookings(result.data);
         console.log('📅 Customer bookings loaded from API');
