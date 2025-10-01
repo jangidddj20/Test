@@ -234,4 +234,137 @@ router.put('/:id/cancel', authenticateToken, authorizeRole(['customer']), async 
     }
 });
 
+// GET /api/bookings/notifications/unread-count - Get unread notification count
+router.get('/notifications/unread-count', authenticateToken, authorizeRole(['customer']), async (req, res) => {
+    try {
+        const userId = req.user.id;
+
+        const result = await db.get(
+            'SELECT COUNT(*) as count FROM notifications WHERE user_id = ? AND is_read = 0',
+            [userId]
+        );
+
+        res.status(200).json({
+            success: true,
+            message: 'Unread notification count retrieved',
+            data: {
+                count: result.count || 0
+            }
+        });
+
+    } catch (error) {
+        console.error('Get unread count error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Internal server error while fetching unread count'
+        });
+    }
+});
+
+// PUT /api/bookings/notifications/mark-all-read - Mark all notifications as read
+router.put('/notifications/mark-all-read', authenticateToken, authorizeRole(['customer']), async (req, res) => {
+    try {
+        const userId = req.user.id;
+
+        await db.run(
+            'UPDATE notifications SET is_read = 1 WHERE user_id = ? AND is_read = 0',
+            [userId]
+        );
+
+        res.status(200).json({
+            success: true,
+            message: 'All notifications marked as read'
+        });
+
+    } catch (error) {
+        console.error('Mark all notifications as read error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Internal server error while marking all notifications as read'
+        });
+    }
+});
+
+// GET /api/bookings/notifications - Get customer notifications
+router.get('/notifications', authenticateToken, authorizeRole(['customer']), async (req, res) => {
+    try {
+        const userId = req.user.id;
+        const { limit = 50, unread_only } = req.query;
+
+        let query = `
+            SELECT
+                n.id, n.title, n.message, n.type, n.is_read, n.created_at,
+                r.name as restaurant_name,
+                b.date as booking_date, b.time as booking_time
+            FROM notifications n
+            LEFT JOIN restaurants r ON n.restaurant_id = r.id
+            LEFT JOIN bookings b ON n.booking_id = b.id
+            WHERE n.user_id = ?
+        `;
+
+        const queryParams = [userId];
+
+        if (unread_only === 'true') {
+            query += ' AND n.is_read = 0';
+        }
+
+        query += ' ORDER BY n.created_at DESC LIMIT ?';
+        queryParams.push(parseInt(limit));
+
+        const notifications = await db.all(query, queryParams);
+
+        res.status(200).json({
+            success: true,
+            message: 'Notifications retrieved successfully',
+            data: notifications
+        });
+
+    } catch (error) {
+        console.error('Get notifications error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Internal server error while fetching notifications'
+        });
+    }
+});
+
+// PUT /api/bookings/notifications/:id/read - Mark notification as read
+router.put('/notifications/:id/read', authenticateToken, authorizeRole(['customer']), async (req, res) => {
+    try {
+        const { id } = req.params;
+        const userId = req.user.id;
+
+        // Verify notification belongs to user
+        const notification = await db.get(
+            'SELECT id FROM notifications WHERE id = ? AND user_id = ?',
+            [id, userId]
+        );
+
+        if (!notification) {
+            return res.status(404).json({
+                success: false,
+                message: 'Notification not found'
+            });
+        }
+
+        // Mark as read
+        await db.run(
+            'UPDATE notifications SET is_read = 1 WHERE id = ?',
+            [id]
+        );
+
+        res.status(200).json({
+            success: true,
+            message: 'Notification marked as read'
+        });
+
+    } catch (error) {
+        console.error('Mark notification as read error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Internal server error while marking notification as read'
+        });
+    }
+});
+
 module.exports = router;

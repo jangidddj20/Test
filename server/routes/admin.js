@@ -1257,7 +1257,7 @@ router.get('/bookings', async (req, res) => {
         const { date, status, limit = 50 } = req.query;
 
         let query = `
-            SELECT 
+            SELECT
                 b.id, b.date, b.time, b.guests, b.special_requests, b.status, b.created_at,
                 lu.name as customer_name, lu.email as customer_email, lu.phone as customer_phone,
                 rt.table_number, rt.capacity as table_capacity
@@ -1266,7 +1266,7 @@ router.get('/bookings', async (req, res) => {
             JOIN restaurant_tables rt ON b.table_id = rt.id
             WHERE b.restaurant_id = ?
         `;
-        
+
         const queryParams = [restaurantId];
 
         if (date) {
@@ -1295,6 +1295,113 @@ router.get('/bookings', async (req, res) => {
         res.status(500).json({
             success: false,
             message: 'Internal server error while fetching bookings'
+        });
+    }
+});
+
+// PUT /api/admin/bookings/:id/status - Update booking status
+router.put('/bookings/:id/status', [
+    body('status').isIn(['confirmed', 'cancelled', 'completed', 'pending']).withMessage('Invalid status')
+], async (req, res) => {
+    try {
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) {
+            return res.status(400).json({
+                success: false,
+                message: 'Validation failed',
+                errors: errors.array()
+            });
+        }
+
+        const { id } = req.params;
+        const { status } = req.body;
+        const restaurantId = req.user.restaurant_id;
+
+        // Check if booking exists and belongs to admin's restaurant
+        const existingBooking = await db.get(`
+            SELECT
+                b.id, b.user_id, b.status as current_status, b.date, b.time, b.table_id,
+                lu.name as customer_name,
+                rt.table_number,
+                r.name as restaurant_name
+            FROM bookings b
+            JOIN login_users lu ON b.user_id = lu.id
+            JOIN restaurant_tables rt ON b.table_id = rt.id
+            JOIN restaurants r ON b.restaurant_id = r.id
+            WHERE b.id = ? AND b.restaurant_id = ?
+        `, [id, restaurantId]);
+
+        if (!existingBooking) {
+            return res.status(404).json({
+                success: false,
+                message: 'Booking not found'
+            });
+        }
+
+        // Update booking status
+        await db.run(
+            'UPDATE bookings SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+            [status, id]
+        );
+
+        // Update table status based on booking status
+        if (status === 'cancelled' || status === 'completed') {
+            await db.run(
+                'UPDATE restaurant_tables SET status = "available" WHERE id = ?',
+                [existingBooking.table_id]
+            );
+        } else if (status === 'confirmed') {
+            await db.run(
+                'UPDATE restaurant_tables SET status = "reserved" WHERE id = ?',
+                [existingBooking.table_id]
+            );
+        }
+
+        // Create notification for the customer
+        const notificationMessages = {
+            confirmed: `Your booking at ${existingBooking.restaurant_name} for table ${existingBooking.table_number} on ${existingBooking.date} at ${existingBooking.time} has been confirmed.`,
+            cancelled: `Your booking at ${existingBooking.restaurant_name} for table ${existingBooking.table_number} on ${existingBooking.date} at ${existingBooking.time} has been cancelled.`,
+            completed: `Your booking at ${existingBooking.restaurant_name} for table ${existingBooking.table_number} has been completed. Thank you for dining with us!`,
+            pending: `Your booking at ${existingBooking.restaurant_name} for table ${existingBooking.table_number} is now pending confirmation.`
+        };
+
+        const notificationTitles = {
+            confirmed: 'Booking Confirmed',
+            cancelled: 'Booking Cancelled',
+            completed: 'Booking Completed',
+            pending: 'Booking Pending'
+        };
+
+        await db.run(`
+            INSERT INTO notifications (user_id, restaurant_id, booking_id, title, message, type, is_read)
+            VALUES (?, ?, ?, ?, ?, ?, 0)
+        `, [
+            existingBooking.user_id,
+            restaurantId,
+            id,
+            notificationTitles[status] || 'Booking Status Update',
+            notificationMessages[status] || `Your booking status has been updated to ${status}.`,
+            status === 'confirmed' ? 'success' : status === 'cancelled' ? 'error' : 'info'
+        ]);
+
+        console.log(`✅ Booking status updated: Booking ${id} changed to ${status} by Admin ${req.user.id}`);
+        console.log(`✅ Notification sent to user ${existingBooking.user_id}`);
+
+        res.status(200).json({
+            success: true,
+            message: 'Booking status updated successfully',
+            data: {
+                bookingId: id,
+                newStatus: status,
+                updated: true
+            }
+        });
+
+    } catch (error) {
+        console.error('Update booking status error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Internal server error while updating booking status'
         });
     }
 });

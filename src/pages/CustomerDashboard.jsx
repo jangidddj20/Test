@@ -4,6 +4,7 @@ import { useCustomerAuth } from '../context/CustomerAuthContext';
 import { useCustomerData } from '../context/CustomerDataContext';
 import { Star, MapPin, Clock, Users, ChefHat, Search, Filter, Heart, Calendar } from 'lucide-react';
 import AIChat from '../components/AIChat';
+import NotificationBell from '../components/NotificationBell';
 
 const CustomerDashboard = () => {
   const { user, logout } = useCustomerAuth();
@@ -64,6 +65,7 @@ const CustomerDashboard = () => {
             </div>
             
             <div className="flex items-center space-x-4">
+              <NotificationBell />
               <div className="text-right hidden sm:block">
                 <p className="text-sm text-gray-600">Welcome back,</p>
                 <p className="font-semibold text-gray-900">{user?.name}</p>

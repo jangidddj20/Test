@@ -263,6 +263,26 @@ async function setupDatabase() {
             )
         `);
 
+        // Create notifications table
+        await runQuery(`
+            CREATE TABLE IF NOT EXISTS notifications (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                restaurant_id INTEGER,
+                booking_id INTEGER,
+                order_id INTEGER,
+                title TEXT NOT NULL,
+                message TEXT NOT NULL,
+                type TEXT DEFAULT 'info',
+                is_read BOOLEAN DEFAULT 0,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES login_users (id),
+                FOREIGN KEY (restaurant_id) REFERENCES restaurants (id),
+                FOREIGN KEY (booking_id) REFERENCES bookings (id),
+                FOREIGN KEY (order_id) REFERENCES orders (id)
+            )
+        `);
+
         console.log('All tables created successfully');
         console.log('Inserting sample data...');
 
