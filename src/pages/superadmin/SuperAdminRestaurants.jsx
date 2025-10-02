@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useSuperAdminAuth } from '../../context/SuperAdminAuthContext';
 import { useNotification } from '../../context/NotificationContext';
+import { apiCache } from '../../utils/apiCache';
 import { Building, Search, Plus, CreditCard as Edit, Trash2, Eye, Star, MapPin, Phone, Users, DollarSign, X, Save } from 'lucide-react';
 
 const SuperAdminRestaurants = () => {
@@ -17,6 +18,7 @@ const SuperAdminRestaurants = () => {
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingRestaurant, setEditingRestaurant] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
+  const loadingRef = useRef(false);
   const [newRestaurant, setNewRestaurant] = useState({
     name: '',
     cuisine: '',
@@ -37,9 +39,16 @@ const SuperAdminRestaurants = () => {
   }, [restaurants, searchTerm]);
 
   const loadRestaurants = async () => {
+    if (loadingRef.current) return;
+
+    loadingRef.current = true;
     setIsLoading(true);
+
     try {
-      const response = await apiCall('/super-admin/restaurants');
+      const response = await apiCache.dedupe('/super-admin/restaurants', {}, async () => {
+        return await apiCall('/super-admin/restaurants');
+      });
+
       if (response.success) {
         setRestaurants(response.data || []);
       } else if (Array.isArray(response)) {
@@ -53,15 +62,17 @@ const SuperAdminRestaurants = () => {
       addNotification('Failed to load restaurants from server', 'error');
     } finally {
       setIsLoading(false);
+      loadingRef.current = false;
     }
   };
 
   // Auto-refresh restaurants data
   useEffect(() => {
     const interval = setInterval(() => {
+      apiCache.invalidatePattern('/super-admin/restaurants');
       loadRestaurants();
-    }, 60000); // Refresh every minute
-    
+    }, 120000); // Refresh every 2 minutes
+
     return () => clearInterval(interval);
   }, []);
 

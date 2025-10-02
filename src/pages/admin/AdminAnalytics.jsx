@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAdminAuth } from '../../context/AdminAuthContext';
 import { useNotification } from '../../context/NotificationContext';
+import { apiCache } from '../../utils/apiCache';
 import { 
   TrendingUp, 
   DollarSign, 
@@ -25,15 +26,22 @@ const AdminAnalytics = () => {
   });
   const [isLoading, setIsLoading] = useState(true);
   const [timeRange, setTimeRange] = useState('7days');
+  const loadingRef = useRef(false);
 
   useEffect(() => {
     loadAnalytics();
   }, [timeRange]);
 
   const loadAnalytics = async () => {
+    if (loadingRef.current) return;
+
+    loadingRef.current = true;
     setIsLoading(true);
+
     try {
-      const response = await apiCall(`/admin/analytics?range=${timeRange}`);
+      const response = await apiCache.dedupe(`/admin/analytics`, { range: timeRange }, async () => {
+        return await apiCall(`/admin/analytics?range=${timeRange}`);
+      });
       if (response && response.success) {
         setAnalyticsData(response.data || {
           revenue: {},
@@ -81,15 +89,17 @@ const AdminAnalytics = () => {
       });
     } finally {
       setIsLoading(false);
+      loadingRef.current = false;
     }
   };
 
   // Auto-refresh analytics data
   useEffect(() => {
     const interval = setInterval(() => {
+      apiCache.invalidatePattern('/admin/analytics');
       loadAnalytics();
     }, 120000); // Refresh every 2 minutes
-    
+
     return () => clearInterval(interval);
   }, [timeRange]);
 

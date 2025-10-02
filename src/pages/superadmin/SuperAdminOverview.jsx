@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useSuperAdminAuth } from '../../context/SuperAdminAuthContext';
 import { useNotification } from '../../context/NotificationContext';
+import { apiCache } from '../../utils/apiCache';
 import { 
   Crown, 
   Building, 
@@ -24,15 +25,22 @@ const SuperAdminOverview = () => {
     recentBookings: []
   });
   const [isLoading, setIsLoading] = useState(true);
+  const loadingRef = useRef(false);
 
   useEffect(() => {
     loadDashboardData();
   }, []);
 
   const loadDashboardData = async () => {
+    if (loadingRef.current) return;
+
+    loadingRef.current = true;
     setIsLoading(true);
+
     try {
-      const response = await apiCall('/super-admin/dashboard');
+      const response = await apiCache.dedupe('/super-admin/dashboard', {}, async () => {
+        return await apiCall('/super-admin/dashboard');
+      });
       if (response && response.success) {
         setDashboardData(response.data);
       } else {
@@ -74,15 +82,17 @@ const SuperAdminOverview = () => {
       });
     } finally {
       setIsLoading(false);
+      loadingRef.current = false;
     }
   };
 
   // Auto-refresh dashboard data
   useEffect(() => {
     const interval = setInterval(() => {
+      apiCache.invalidatePattern('/super-admin/dashboard');
       loadDashboardData();
-    }, 60000); // Refresh every minute
-    
+    }, 120000); // Refresh every 2 minutes
+
     return () => clearInterval(interval);
   }, []);
 

@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAdminAuth } from '../../context/AdminAuthContext';
 import { useNotification } from '../../context/NotificationContext';
+import { apiCache } from '../../utils/apiCache';
 import { Bell, AlertCircle, CheckCircle, Info, Clock, Trash2, BookMarked as MarkAsRead } from 'lucide-react';
 
 const AdminNotifications = () => {
@@ -10,15 +11,23 @@ const AdminNotifications = () => {
   const [notifications, setNotifications] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [filter, setFilter] = useState('all');
+  const loadingRef = useRef(false);
 
   useEffect(() => {
     loadNotifications();
   }, []);
 
   const loadNotifications = async () => {
+    if (loadingRef.current) return;
+
+    loadingRef.current = true;
     setIsLoading(true);
+
     try {
-      const response = await apiCall('/admin/notifications');
+      const response = await apiCache.dedupe('/admin/notifications', {}, async () => {
+        return await apiCall('/admin/notifications');
+      });
+
       if (response && response.success) {
         setNotifications(response.data || []);
       } else if (Array.isArray(response)) {
@@ -29,19 +38,20 @@ const AdminNotifications = () => {
       }
     } catch (error) {
       console.error('Failed to load notifications:', error);
-      // Don't show error notification for missing endpoint
       console.warn('Notifications endpoint not available');
     } finally {
       setIsLoading(false);
+      loadingRef.current = false;
     }
   };
 
   // Auto-refresh notifications
   useEffect(() => {
     const interval = setInterval(() => {
+      apiCache.invalidatePattern('/admin/notifications');
       loadNotifications();
-    }, 60000); // Refresh every minute
-    
+    }, 120000); // Refresh every 2 minutes
+
     return () => clearInterval(interval);
   }, []);
 
@@ -52,11 +62,10 @@ const AdminNotifications = () => {
       });
 
       if (response.success) {
-        setNotifications(prev => prev.map(notif => 
+        setNotifications(prev => prev.map(notif =>
           notif.id === notificationId ? { ...notif, read: true } : notif
         ));
-        // Reload notifications to ensure consistency
-        setTimeout(() => loadNotifications(), 1000);
+        apiCache.invalidatePattern('/admin/notifications');
       }
     } catch (error) {
       addNotification('Failed to mark notification as read', 'error');

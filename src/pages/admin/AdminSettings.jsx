@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAdminAuth } from '../../context/AdminAuthContext';
 import { useNotification } from '../../context/NotificationContext';
+import { apiCache } from '../../utils/apiCache';
 import { 
   Settings, 
   Building, 
@@ -44,15 +45,22 @@ const AdminSettings = () => {
   });
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const loadingRef = useRef(false);
 
   useEffect(() => {
     loadRestaurantData();
   }, []);
 
   const loadRestaurantData = async () => {
+    if (loadingRef.current) return;
+
+    loadingRef.current = true;
     setIsLoading(true);
+
     try {
-      const response = await apiCall('/admin/restaurant');
+      const response = await apiCache.dedupe('/admin/restaurant', {}, async () => {
+        return await apiCall('/admin/restaurant');
+      });
       if (response && response.success) {
         setRestaurantData(prev => ({
           ...prev,
@@ -66,15 +74,17 @@ const AdminSettings = () => {
       addNotification('Failed to load restaurant data from server', 'error');
     } finally {
       setIsLoading(false);
+      loadingRef.current = false;
     }
   };
 
   // Auto-refresh restaurant data
   useEffect(() => {
     const interval = setInterval(() => {
+      apiCache.invalidatePattern('/admin/restaurant');
       loadRestaurantData();
     }, 120000); // Refresh every 2 minutes
-    
+
     return () => clearInterval(interval);
   }, []);
 
@@ -89,8 +99,7 @@ const AdminSettings = () => {
 
       if (response && response.success) {
         addNotification('Restaurant settings updated successfully', 'success');
-        // Reload restaurant data to ensure consistency
-        setTimeout(() => loadRestaurantData(), 1000);
+        apiCache.invalidatePattern('/admin/restaurant');
       } else {
         addNotification('Failed to update restaurant settings', 'error');
       }

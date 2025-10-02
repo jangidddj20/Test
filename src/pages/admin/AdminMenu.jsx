@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAdminAuth } from '../../context/AdminAuthContext';
 import { useNotification } from '../../context/NotificationContext';
+import { apiCache } from '../../utils/apiCache';
 import { ChefHat, Plus, CreditCard as Edit, Trash2, Search, Filter, Star, Eye, EyeOff, Table, Upload, Image as ImageIcon, X } from 'lucide-react';
 
 const AdminMenu = () => {
@@ -19,6 +20,8 @@ const AdminMenu = () => {
   const [showImageModal, setShowImageModal] = useState(false);
   const [selectedTable, setSelectedTable] = useState(null);
   const [uploadingImages, setUploadingImages] = useState(false);
+  const loadingMenuRef = useRef(false);
+  const loadingTablesRef = useRef(false);
   const [newTable, setNewTable] = useState({
     table_number: '',
     capacity: 2,
@@ -47,12 +50,18 @@ const AdminMenu = () => {
   }, [menuItems, searchTerm, categoryFilter]);
 
   const loadMenuItems = async () => {
+    if (loadingMenuRef.current) return;
+
+    loadingMenuRef.current = true;
+
     try {
-      const response = await apiCall('/admin/menu');
+      const response = await apiCache.dedupe('/admin/menu', {}, async () => {
+        return await apiCall('/admin/menu');
+      });
+
       if (response && response.success) {
         setMenuItems(response.data);
       } else if (Array.isArray(response)) {
-        // Handle direct array response
         setMenuItems(response);
       } else {
         console.warn('Unexpected menu response format:', response);
@@ -61,16 +70,24 @@ const AdminMenu = () => {
     } catch (error) {
       console.error('Failed to load menu items:', error);
       addNotification('Failed to load menu items from server', 'error');
+    } finally {
+      loadingMenuRef.current = false;
     }
   };
 
   const loadTables = async () => {
+    if (loadingTablesRef.current) return;
+
+    loadingTablesRef.current = true;
+
     try {
-      const response = await apiCall('/admin/tables');
+      const response = await apiCache.dedupe('/admin/tables', {}, async () => {
+        return await apiCall('/admin/tables');
+      });
+
       if (response && response.success) {
         setTables(response.data);
       } else if (Array.isArray(response)) {
-        // Handle direct array response
         setTables(response);
       } else {
         console.warn('Unexpected tables response format:', response);
@@ -81,6 +98,7 @@ const AdminMenu = () => {
       addNotification('Failed to load tables from server', 'error');
     } finally {
       setIsLoading(false);
+      loadingTablesRef.current = false;
     }
   };
 
