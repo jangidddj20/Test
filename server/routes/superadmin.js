@@ -145,6 +145,38 @@ router.put('/restaurants/:id', [
             updateValues
         );
 
+        // Get admin user for this restaurant to send notification
+        const adminUser = await db.get(
+            'SELECT id FROM users WHERE restaurant_id = ? AND role = "admin" LIMIT 1',
+            [id]
+        );
+
+        const updatedRestaurant = await db.get(
+            'SELECT name FROM restaurants WHERE id = ?',
+            [id]
+        );
+
+        // Send notification to admin about restaurant update
+        if (adminUser && updatedRestaurant) {
+            const updatedFieldsList = updateFields
+                .filter(f => !f.includes('updated_at'))
+                .map(f => f.split(' = ')[0])
+                .join(', ');
+
+            await db.run(`
+                INSERT INTO notifications (admin_user_id, restaurant_id, title, message, type, is_read)
+                VALUES (?, ?, ?, ?, ?, 0)
+            `, [
+                adminUser.id,
+                id,
+                'Restaurant Information Updated',
+                `Your restaurant "${updatedRestaurant.name}" information has been updated by the Super Admin. Updated fields: ${updatedFieldsList}`,
+                'info'
+            ]);
+
+            console.log(`✅ Notification sent to admin user ${adminUser.id}`);
+        }
+
         console.log(`✅ Restaurant updated: ID ${id} by Super Admin ${req.user.id}`);
 
         res.status(200).json({
@@ -201,11 +233,41 @@ router.put('/restaurants/:id/status', [
             [is_active, id]
         );
 
+        // Get admin user for this restaurant to send notification
+        const adminUser = await db.get(
+            'SELECT id FROM users WHERE restaurant_id = ? AND role = "admin" LIMIT 1',
+            [id]
+        );
+
         // Update ONLY the admin user status for this restaurant, not customer data
         await db.run(
             'UPDATE users SET is_active = ? WHERE restaurant_id = ? AND role = "admin"',
             [is_active, id]
         );
+
+        // Send notification to admin
+        if (adminUser) {
+            const notificationMessage = is_active
+                ? `Your restaurant "${existingRestaurant.name}" has been activated by the Super Admin. You can now resume operations.`
+                : `Your restaurant "${existingRestaurant.name}" has been deactivated by the Super Admin. Please contact support for more information.`;
+
+            const notificationTitle = is_active
+                ? 'Restaurant Activated'
+                : 'Restaurant Deactivated';
+
+            await db.run(`
+                INSERT INTO notifications (admin_user_id, restaurant_id, title, message, type, is_read)
+                VALUES (?, ?, ?, ?, ?, 0)
+            `, [
+                adminUser.id,
+                id,
+                notificationTitle,
+                notificationMessage,
+                is_active ? 'success' : 'alert'
+            ]);
+
+            console.log(`✅ Notification sent to admin user ${adminUser.id}`);
+        }
 
         console.log(`✅ Restaurant status updated: ${existingRestaurant.name} set to ${is_active ? 'active' : 'inactive'} by Super Admin ${req.user.id}`);
 
@@ -524,6 +586,140 @@ router.get('/analytics', async (req, res) => {
                 orderStatusDistribution: [],
                 popularCuisines: []
             }
+        });
+    }
+});
+
+// GET /api/super-admin/notifications - Get super admin notifications
+router.get('/notifications', async (req, res) => {
+    try {
+        const { limit = 50 } = req.query;
+
+        // Super admin can see system-level notifications
+        const notifications = await db.all(`
+            SELECT
+                n.id, n.title, n.message, n.type, n.is_read as read, n.created_at,
+                r.name as restaurant_name
+            FROM notifications n
+            LEFT JOIN restaurants r ON n.restaurant_id = r.id
+            WHERE n.admin_user_id IS NULL AND n.user_id IS NULL
+            ORDER BY n.created_at DESC
+            LIMIT ?
+        `, [parseInt(limit)]);
+
+        res.status(200).json({
+            success: true,
+            message: 'Notifications retrieved successfully',
+            data: notifications
+        });
+
+    } catch (error) {
+        console.error('Get super admin notifications error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Internal server error while fetching notifications'
+        });
+    }
+});
+
+// POST /api/super-admin/notifications/send - Send notification to admin
+router.post('/notifications/send', [
+    body('restaurant_id').isInt({ min: 1 }).withMessage('Valid restaurant ID is required'),
+    body('title').trim().isLength({ min: 1, max: 200 }).withMessage('Title is required'),
+    body('message').trim().isLength({ min: 1, max: 1000 }).withMessage('Message is required'),
+    body('type').optional().isIn(['info', 'success', 'alert', 'error']).withMessage('Invalid notification type')
+], async (req, res) => {
+    try {
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) {
+            return res.status(400).json({
+                success: false,
+                message: 'Validation failed',
+                errors: errors.array()
+            });
+        }
+
+        const { restaurant_id, title, message, type = 'info' } = req.body;
+
+        // Get admin user for this restaurant
+        const adminUser = await db.get(
+            'SELECT id FROM users WHERE restaurant_id = ? AND role = "admin" LIMIT 1',
+            [restaurant_id]
+        );
+
+        if (!adminUser) {
+            return res.status(404).json({
+                success: false,
+                message: 'Admin user not found for this restaurant'
+            });
+        }
+
+        // Create notification
+        await db.run(`
+            INSERT INTO notifications (admin_user_id, restaurant_id, title, message, type, is_read)
+            VALUES (?, ?, ?, ?, ?, 0)
+        `, [adminUser.id, restaurant_id, title, message, type]);
+
+        console.log(`✅ Notification sent to admin of restaurant ${restaurant_id} by Super Admin ${req.user.id}`);
+
+        res.status(201).json({
+            success: true,
+            message: 'Notification sent successfully'
+        });
+
+    } catch (error) {
+        console.error('Send notification error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Internal server error while sending notification'
+        });
+    }
+});
+
+// PUT /api/super-admin/notifications/:id/read - Mark notification as read
+router.put('/notifications/:id/read', async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        await db.run(
+            'UPDATE notifications SET is_read = 1 WHERE id = ?',
+            [id]
+        );
+
+        res.status(200).json({
+            success: true,
+            message: 'Notification marked as read'
+        });
+
+    } catch (error) {
+        console.error('Mark notification as read error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Internal server error while marking notification as read'
+        });
+    }
+});
+
+// DELETE /api/super-admin/notifications/:id - Delete notification
+router.delete('/notifications/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        await db.run(
+            'DELETE FROM notifications WHERE id = ?',
+            [id]
+        );
+
+        res.status(200).json({
+            success: true,
+            message: 'Notification deleted successfully'
+        });
+
+    } catch (error) {
+        console.error('Delete notification error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Internal server error while deleting notification'
         });
     }
 });

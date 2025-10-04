@@ -28,37 +28,32 @@ router.use((req, res, next) => {
 router.get('/notifications', async (req, res) => {
     try {
         const restaurantId = req.user.restaurant_id;
-        
-        // Generate sample notifications for demo
-        const notifications = [
-            {
-                id: 1,
-                title: 'New Order Received',
-                message: 'Order #1234 has been placed by John Doe',
-                type: 'order',
-                read: false,
-                urgent: false,
-                created_at: new Date(Date.now() - 300000)
-            },
-            {
-                id: 2,
-                title: 'Table Booking Confirmed',
-                message: 'Table 5 has been booked for tonight at 7:00 PM',
-                type: 'booking',
-                read: false,
-                urgent: false,
-                created_at: new Date(Date.now() - 600000)
-            },
-            {
-                id: 3,
-                title: 'Menu Item Low Stock',
-                message: 'Wagyu Beef Tenderloin is running low on inventory',
-                type: 'alert',
-                read: true,
-                urgent: true,
-                created_at: new Date(Date.now() - 1800000)
-            }
-        ];
+        const adminUserId = req.user.id;
+        const { limit = 50, unread_only } = req.query;
+
+        let query = `
+            SELECT
+                n.id, n.title, n.message, n.type, n.is_read as read, n.created_at,
+                r.name as restaurant_name,
+                b.date as booking_date, b.time as booking_time,
+                o.order_type, o.status as order_status
+            FROM notifications n
+            LEFT JOIN restaurants r ON n.restaurant_id = r.id
+            LEFT JOIN bookings b ON n.booking_id = b.id
+            LEFT JOIN orders o ON n.order_id = o.id
+            WHERE n.admin_user_id = ?
+        `;
+
+        const queryParams = [adminUserId];
+
+        if (unread_only === 'true') {
+            query += ' AND n.is_read = 0';
+        }
+
+        query += ' ORDER BY n.created_at DESC LIMIT ?';
+        queryParams.push(parseInt(limit));
+
+        const notifications = await db.all(query, queryParams);
 
         res.status(200).json({
             success: true,
@@ -79,7 +74,27 @@ router.get('/notifications', async (req, res) => {
 router.put('/notifications/:id/read', async (req, res) => {
     try {
         const { id } = req.params;
-        
+        const adminUserId = req.user.id;
+
+        // Verify notification belongs to admin
+        const notification = await db.get(
+            'SELECT id FROM notifications WHERE id = ? AND admin_user_id = ?',
+            [id, adminUserId]
+        );
+
+        if (!notification) {
+            return res.status(404).json({
+                success: false,
+                message: 'Notification not found'
+            });
+        }
+
+        // Mark as read
+        await db.run(
+            'UPDATE notifications SET is_read = 1 WHERE id = ?',
+            [id]
+        );
+
         res.status(200).json({
             success: true,
             message: 'Notification marked as read',
@@ -99,7 +114,27 @@ router.put('/notifications/:id/read', async (req, res) => {
 router.delete('/notifications/:id', async (req, res) => {
     try {
         const { id } = req.params;
-        
+        const adminUserId = req.user.id;
+
+        // Verify notification belongs to admin
+        const notification = await db.get(
+            'SELECT id FROM notifications WHERE id = ? AND admin_user_id = ?',
+            [id, adminUserId]
+        );
+
+        if (!notification) {
+            return res.status(404).json({
+                success: false,
+                message: 'Notification not found'
+            });
+        }
+
+        // Delete notification
+        await db.run(
+            'DELETE FROM notifications WHERE id = ?',
+            [id]
+        );
+
         res.status(200).json({
             success: true,
             message: 'Notification deleted successfully',
@@ -1217,6 +1252,18 @@ router.put('/orders/:id/status', [
             });
         }
 
+        // Get order details for notification
+        const orderDetails = await db.get(`
+            SELECT
+                o.id, o.user_id, o.status as current_status, o.order_type, o.total_amount,
+                lu.name as customer_name,
+                r.name as restaurant_name
+            FROM orders o
+            JOIN login_users lu ON o.user_id = lu.id
+            JOIN restaurants r ON o.restaurant_id = r.id
+            WHERE o.id = ? AND o.restaurant_id = ?
+        `, [id, restaurantId]);
+
         // Update order status
         await db.run(
             'UPDATE orders SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
@@ -1229,7 +1276,37 @@ router.put('/orders/:id/status', [
             VALUES (?, ?, ?, ?)
         `, [id, status, req.user.id, `Status changed from ${existingOrder.current_status} to ${status}`]);
 
+        // Create notification for the customer
+        const notificationMessages = {
+            confirmed: `Your ${orderDetails.order_type} order at ${orderDetails.restaurant_name} has been confirmed and is being prepared.`,
+            preparing: `Your order at ${orderDetails.restaurant_name} is now being prepared.`,
+            ready: `Your order at ${orderDetails.restaurant_name} is ready for ${orderDetails.order_type === 'pickup' ? 'pickup' : 'delivery'}!`,
+            completed: `Your order at ${orderDetails.restaurant_name} has been completed. Thank you for your order!`,
+            cancelled: `Your order at ${orderDetails.restaurant_name} has been cancelled.`
+        };
+
+        const notificationTitles = {
+            confirmed: 'Order Confirmed',
+            preparing: 'Order in Progress',
+            ready: 'Order Ready',
+            completed: 'Order Completed',
+            cancelled: 'Order Cancelled'
+        };
+
+        await db.run(`
+            INSERT INTO notifications (user_id, restaurant_id, order_id, title, message, type, is_read)
+            VALUES (?, ?, ?, ?, ?, ?, 0)
+        `, [
+            orderDetails.user_id,
+            restaurantId,
+            id,
+            notificationTitles[status] || 'Order Status Update',
+            notificationMessages[status] || `Your order status has been updated to ${status}.`,
+            status === 'completed' || status === 'ready' ? 'success' : status === 'cancelled' ? 'error' : 'info'
+        ]);
+
         console.log(`✅ Order status updated: Order ${id} changed to ${status} by Admin ${req.user.id}`);
+        console.log(`✅ Notification sent to user ${orderDetails.user_id}`);
 
         res.status(200).json({
             success: true,

@@ -30,7 +30,8 @@ async function addNotificationsTable() {
         await runQuery(`
             CREATE TABLE IF NOT EXISTS notifications (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER NOT NULL,
+                user_id INTEGER,
+                admin_user_id INTEGER,
                 restaurant_id INTEGER,
                 booking_id INTEGER,
                 order_id INTEGER,
@@ -40,6 +41,7 @@ async function addNotificationsTable() {
                 is_read BOOLEAN DEFAULT 0,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (user_id) REFERENCES login_users (id),
+                FOREIGN KEY (admin_user_id) REFERENCES users (id),
                 FOREIGN KEY (restaurant_id) REFERENCES restaurants (id),
                 FOREIGN KEY (booking_id) REFERENCES bookings (id),
                 FOREIGN KEY (order_id) REFERENCES orders (id)
